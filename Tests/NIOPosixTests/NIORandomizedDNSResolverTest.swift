@@ -88,7 +88,7 @@ private final class CancelTrackingMockResolver: Resolver, @unchecked Sendable {
 struct NIORandomizedDNSResolverTest {
 
     @Test
-    func defaultInitializerResolves() async throws {
+    func defaultInitializerResolves() throws {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         defer {
             #expect(throws: Never.self) {
@@ -96,15 +96,12 @@ struct NIORandomizedDNSResolverTest {
             }
         }
 
-        let resolver = NIORandomizedDNSResolver(loop: group.next())
+        let v4Addresses = [try SocketAddress(ipAddress: "127.0.0.1", port: 80)]
+        let mock = MockResolver(loop: group.next(), v4Results: v4Addresses)
+        let resolver = NIORandomizedDNSResolver(resolver: mock)
 
-        // Both queries must be initiated before awaiting — initiateAAAAQuery
-        // triggers the actual getaddrinfo call that completes both futures.
-        let v4Future = resolver.initiateAQuery(host: "127.0.0.1", port: 80)
-        let v6Future = resolver.initiateAAAAQuery(host: "127.0.0.1", port: 80)
-
-        let addressV4 = try await v4Future.get()
-        let addressV6 = try await v6Future.get()
+        let addressV4 = try resolver.initiateAQuery(host: "127.0.0.1", port: 80).wait()
+        let addressV6 = try resolver.initiateAAAAQuery(host: "127.0.0.1", port: 80).wait()
         let expectedV4 = try SocketAddress(ipAddress: "127.0.0.1", port: 80)
         #expect(addressV4.count == 1)
         #expect(addressV4[0] == expectedV4)
